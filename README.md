@@ -7,6 +7,7 @@ USAGE:
 a) py hash2csvbatch.py -p "path_to_folder_containing_summary (without trailing slash)"
 example:
 py hash2csvbatch.py -p "C:\\test"
+
 2. Search in virustotal db using their v3 api. This search look only through avast av entries.
 
 a) py hash2csvbatch.py -f secondary
