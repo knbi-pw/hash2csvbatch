@@ -36,7 +36,7 @@ class Model(object):
 
     def set_path_to_cmd_line_arg(self, path):
         self.path = path
-        print(path)
+        print("Path set to: " + path)
 
     def create_file_if_not_exist(self, fname):
         if not os.path.isfile(fname):
