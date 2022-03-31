@@ -51,15 +51,13 @@ class Model(object):
 
     def create_file_if_not_exist(self, fname):
         if not os.path.isfile(fname):
+            open(fname, "x")
             if fname == RESULT_FILE:
-                open(fname, "x")
                 with open(fname, "w", newline='') as result_file:
                     spamwriter = csv.writer(result_file, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
                     spamwriter.writerow(
                         ['md5', 'file_type_mime', 'signature', 'delivery_method', 'file_information', 'first_seen',
                          'last_seen', 'yara_rules', 'comments'])
-            else:
-                open(fname, "x")
 
     def already_processed_gen_list(self):
         with open(LOG_FILE, "r", newline='') as already_processed:
