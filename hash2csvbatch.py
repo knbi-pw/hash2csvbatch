@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import itertools
 import sys
+import argparse
 import time
-import datetime
+from datetime import datetime
 
 import requests
 import os
@@ -19,8 +20,18 @@ PROCESSED_HASH_FILE = "processed_md5s.csv"
 NOT_PROCESSED_YET_FILE = "processed_not_yet.csv"
 NOT_PROCESSED_YET_ALT_FILE = "processed_not_yet_alt.csv"
 RESULT_FILE = "result.csv"
-PATH = "C:\\test"
+RESULT_FILE_ALT = "result_alt.csv"
+maxInt = sys.maxsize
 
+while True:
+    # decrease the maxInt value by factor 10
+    # as long as the OverflowError occurs.
+
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
 class Model(object):
     def __init__(self):
@@ -32,11 +43,11 @@ class Model(object):
         self.unprocessed_list = None
         self.processed_num = 0
         self.unprocessed_num = 0
-        self.today_date = int(datetime.datetime.utcnow().strftime("%Y%m%d"))
+        self.today_date = int(datetime.utcnow().strftime("%Y%m%d"))
 
-    def set_path_to_cmd_line_arg(self, path):
-        self.path = path
-        print("Path set to: " + path)
+    def set_path_to_cmd_line_arg(self):
+        self.path = args.path
+        print("Path set to: " + self.path)
 
     def create_file_if_not_exist(self, fname):
         if not os.path.isfile(fname):
@@ -77,6 +88,40 @@ class Model(object):
             self.unprocessed_list = list(reader)
             self.unprocessed_list.pop(0)
 
+    def load_md5s_results_from_csv(self):
+        with open(RESULT_FILE, "r", newline='', encoding='utf8') as f:
+            reader = csv.reader(f)
+            self.processed = list(reader)
+            self.processed.pop(0)
+
+    def fix_datetime_in_results(self):
+        #wyedytowac
+        i = 0
+        while i < len(self.processed):
+            try:
+                datetime.strptime(self.processed[i][5], "%Y-%m-%d %H:%M:%S")
+                print("Data in correct format, I'm moving forward #" + str(i))
+            except ValueError:
+                fixed_datetime1 = int(self.processed[i][5])
+                self.processed[i][5] = datetime.fromtimestamp(fixed_datetime1)
+                fixed_datetime2 = int(self.processed[i][6])
+                self.processed[i][6] = datetime.fromtimestamp(fixed_datetime2)
+                self.processed_num = self.processed_num + 1
+            i = i + 1
+
+    def save_md5s_after_datetime_fix(self):
+        time_stamp = str(int(time.time()))
+        with open(RESULT_FILE_ALT, 'w', newline='\n', encoding='utf8') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=",", quotechar='"',
+                                    quoting=csv.QUOTE_MINIMAL)
+            spamwriter.writerow(['md5', 'file_type_mime', 'signature', 'delivery_method', 'file_information', 'first_seen',
+                                 'last_seen', 'yara_rules', 'comments'])
+            for e in self.processed:
+                spamwriter.writerows([e])
+        os.rename(RESULT_FILE, RESULT_FILE + time_stamp)
+        time.sleep(2.4)
+        os.rename(RESULT_FILE_ALT, RESULT_FILE)
+
     def save_md5_to_processed_file(self, final_hash):
         with open(PROCESSED_HASH_FILE, 'a', newline='') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=",", quotechar='"',
@@ -96,16 +141,17 @@ class Model(object):
         os.rename(NOT_PROCESSED_YET_ALT_FILE, NOT_PROCESSED_YET_FILE)
 
     def find_md5s_at_virustotal(self):
+        #implement in unforseenable future
         return True
 
     def search_hash_at_virustotal(self, malware_hash):
         # at least 0.3 second waiting time for request
         time.sleep(0.3)
         headers = {"Accept": "application/json",
-                   "x-apikey": "SUPER_TAJNE_HASLO/TOP_SECRET_KEEY"}
+                   "x-apikey": "2006e1fdb37824ee7a8386aa483fc96a43ad677aca230f3d927a9d69e653708a"}
         final_url = URL_VIRUSTOTAL + malware_hash
         try:
-            response = requests.get(final_url, headers=headers, timeout=15)
+            response = requests.get(final_url, headers=headers, timeout=5)
             if response.status_code == 429:
                 print("END OF QUOTA (VIRUSTOTAL)")
                 return 3
@@ -138,6 +184,71 @@ class Model(object):
                     print("200.hash:" + malware_hash)
                     self.save_md5_to_processed_file(self.malware_hash)
                     signature = resp_content['data']['attributes']['last_analysis_results']['Avast']['result']
+                    last_submission_date = datetime.fromtimestamp(int(resp_content['data']['attributes']['last_submission_date']))
+                    first_submission_date = datetime.fromtimestamp(int(resp_content['data']['attributes']['first_submission_date']))
+                    with open(RESULT_FILE, 'a', encoding="utf-8", newline='') as csvfile:
+                        spamwriter = csv.writer(csvfile, delimiter=",", quotechar='"',
+                                                quoting=csv.QUOTE_MINIMAL)
+                        spamwriter.writerow(
+                            [malware_hash, None,
+                             signature,
+                             None,
+                             None,
+                             first_submission_date,
+                             last_submission_date,
+                             None,
+                             None
+                             ])
+                self.processed_num = self.processed_num + 1
+                return 0
+
+    def search_hash_at_virustotal_third_pass(self, malware_hash):
+        # at least 0.3 second waiting time for request
+        time.sleep(0.3)
+        headers = {"Accept": "application/json",
+                   "x-apikey": "BARDDZ_TAJNE_KLUCZYWO/SUPER_SECRET_KEEY"}
+        final_url = URL_VIRUSTOTAL + malware_hash
+        try:
+            response = requests.get(final_url, headers=headers, timeout=
+
+            5)
+            if response.status_code == 429:
+                print("END OF QUOTA (VIRUSTOTAL)")
+                return 3
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as errh:
+            print("Http Error:", errh)
+            self.unprocessed_num = self.unprocessed_num + 1
+            return 1
+        except requests.exceptions.ConnectionError as errc:
+            print("Error Connecting:", errc)
+            self.unprocessed_num = self.unprocessed_num + 1
+            return 1
+        except requests.exceptions.Timeout as errt:
+            print("Timeout Error:", errt)
+            self.unprocessed_num = self.unprocessed_num + 1
+            return 1
+        except requests.exceptions.RequestException as err:
+            print("OOps: Something Else", err)
+            self.search_hash_at_virustotal(malware_hash)
+        else:
+            if response.status_code == 200:
+                resp_content = response.json()
+                count = 0
+                try:
+                    for key in resp_content['data']['attributes']['last_analysis_results']:
+                        value = resp_content['data']['attributes']['last_analysis_results'][key]
+                        if value['category'] == 'malicious':
+                            count == count + 1
+                            signature = value['result']
+                        if count == 0:
+                            return 1
+                except KeyError as e:
+                    print("No malicious error")
+                    return 1
+                else:
+                    print("200.hash:" + malware_hash)
+                    self.save_md5_to_processed_file(self.malware_hash)
                     last_submission_date = resp_content['data']['attributes']['last_submission_date']
                     first_submission_date = resp_content['data']['attributes']['first_submission_date']
                     with open(RESULT_FILE, 'a', encoding="utf-8", newline='') as csvfile:
@@ -156,26 +267,32 @@ class Model(object):
                 self.processed_num = self.processed_num + 1
                 return 0
 
-    def process_md5s_from_unprocessed_list(self):
+    def process_md5s_from_unprocessed_list(self, n_pass):
         i = 0
         # commented out due to issue with too low alarm point
         # quota = 0
         while i < len(self.unprocessed_list):
-            if self.unprocessed_list[i][1] == "1":
+            if n_pass == 2 and self.unprocessed_list[i][1] == "1":
                 result_code = self.search_hash_at_virustotal(self.unprocessed_list[i][0])
-                if result_code == 0:
-                    self.unprocessed_list.pop(i)
-                elif result_code == 1:
-                    self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
-                elif result_code == 2:
-                    self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
-                    break
-                elif result_code == 3:
-                    self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
-                    break
-                else:
-                    self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
-                    break
+            elif n_pass == 3 and self.unprocessed_list[i][1] == "2":
+                result_code = self.search_hash_at_virustotal_third_pass(self.unprocessed_list[i][0])
+            else:
+                result_code = 4
+            if result_code == 0:
+                self.unprocessed_list.pop(i)
+            elif result_code == 1:
+                self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
+            elif result_code == 2:
+                self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
+                break
+            elif result_code == 3:
+                self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
+                break
+            elif result_code == 4:
+                pass
+            else:
+                self.unprocessed_list[i][1] = int(self.unprocessed_list[i][1]) + 1
+                break
             i = i + 1
             # commented out due to issue with too low alarm point
             # quota = quota + 1
@@ -253,7 +370,7 @@ def main():
     print('Primary search started!')
     model = Model()
 
-    model.set_path_to_cmd_line_arg(sys.argv[-1])
+    model.set_path_to_cmd_line_arg()
     model.create_file_if_not_exist(LOG_FILE)
     model.create_file_if_not_exist(PROCESSED_HASH_FILE)
     model.create_file_if_not_exist(NOT_PROCESSED_YET_FILE)
@@ -270,20 +387,53 @@ def secondary():
     print('Alternative search started!')
     model = Model()
 
+    model.set_path_to_cmd_line_arg()
     model.load_md5s_from_csv()
-    model.process_md5s_from_unprocessed_list()
+    model.process_md5s_from_unprocessed_list(2)
     model.display_stats()
 
 
 def third():
-    pass
+    print('The last and the final search started!')
+    model = Model()
+
+    model.set_path_to_cmd_line_arg()
+    model.load_md5s_from_csv()
+    model.process_md5s_from_unprocessed_list(3)
+    model.display_stats()
+
+
+def datetime_normalization():
+    print('Fixing dates to keep them in one, right format')
+    model = Model()
+
+    model.set_path_to_cmd_line_arg()
+    model.load_md5s_results_from_csv()
+    model.fix_datetime_in_results()
+    model.save_md5s_after_datetime_fix()
+    model.display_stats()
 
 
 if __name__ == '__main__':
-    if sys.argv[-2] == '-f':
-        if sys.argv[-1] == 'secondary':
-            secondary()
-        elif sys.argv[-1] == 'third':
-            third()
-    elif sys.argv[-2] == '-p':
+    parser = argparse.ArgumentParser(description='Example parameters')
+    parser.add_argument(
+        '-f',
+        '--mode',
+        default='primary',
+        help='provide a mode/pass to run'
+    )
+    parser.add_argument(
+        '-p',
+        '--path',
+        default="C:\\test",
+        help='provide an path to look into (default: C:\Test)'
+    )
+    args = parser.parse_args()
+    if args.mode == 'primary':
         main()
+    elif args.mode == 'secondary':
+        secondary()
+    elif args.mode == 'third':
+        third()
+    elif args.mode == 'datetime_normalization':
+        datetime_normalization()
